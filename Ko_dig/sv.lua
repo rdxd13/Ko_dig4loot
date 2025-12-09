@@ -33,6 +33,7 @@ RegisterNetEvent("digging:reward", function(clientToken)
         return
     end
 
+    -- Tieri
     local tier = getRewardTier()
     local reward = Config.Rewards[tier][math.random(#Config.Rewards[tier])]
 
