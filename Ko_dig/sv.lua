@@ -1,61 +1,49 @@
-ESX = exports["es_extended"]:getSharedObject()
-
 local activeTokens = {}
 
--- token
-ESX.RegisterUsableItem(Config.RequiredItem, function(source)
-    local _source = source
-    local xPlayer = ESX.GetPlayerFromId(_source)
-    if not xPlayer then return end
-
-    local token = math.random(100000, 999999)
-    activeTokens[_source] = token
-    
-    TriggerClientEvent("digging:verify", _source, token)
-    TriggerClientEvent("digging:start", _source)
-
+RegisterNetEvent("digging:registerToken", function(token)
+    local src = source
+    activeTokens[src] = token
 end)
 
-RegisterNetEvent("digging:reward")
-AddEventHandler("digging:reward", function(clientToken)
-    local _source = source
-    local xPlayer = ESX.GetPlayerFromId(_source)
-    
-    -- check for exploit
-    if not xPlayer then return end
-    if not activeTokens[_source] or activeTokens[_source] ~= clientToken then
-        print('[Exploit] digging reward')
+RegisterNetEvent("digging:reward", function(clientToken)
+    local src = source
+    local player = exports.qbx_core:GetPlayer(src)
+    if not player then return end
+
+    if not activeTokens[src] or activeTokens[src] ~= clientToken then
+        print(("[EXPLOIT] %s tried to claim digging reward with invalid token."):format(GetPlayerName(src)))
         return
     end
 
-    activeTokens[_source] = nil
+    activeTokens[src] = nil
 
-    local playerCoords = GetEntityCoords(GetPlayerPed(_source))
-    local inDigArea = false
+    local ped = GetPlayerPed(src)
+    local coords = GetEntityCoords(ped)
+    local inArea = false
+
     for _, loc in pairs(Config.DiggingLocations) do
-        if #(playerCoords - loc) <= Config.DigRadius then
-            inDigArea = true
+        if #(coords - loc) <= Config.DigRadius then
+            inArea = true
             break
         end
     end
 
-    if not inDigArea then
-        print("[Ko dig for loot] player: " .. xPlayer.getName() .. " tried to exploit!")
+    if not inArea then
+        print(("[EXPLOIT] %s attempted digging reward outside area!"):format(GetPlayerName(src)))
         return
     end
 
-    local rewardTier = getRewardTier()
-    local reward = Config.Rewards[rewardTier][math.random(#Config.Rewards[rewardTier])]
+    local tier = getRewardTier()
+    local reward = Config.Rewards[tier][math.random(#Config.Rewards[tier])]
 
-    xPlayer.addInventoryItem(reward, 1)
-    sendToDiscord(xPlayer.getName(), reward)
+    exports.ox_inventory:AddItem(src, reward, 1)
+    sendToDiscord(GetPlayerName(src), reward)
 end)
 
-
--- tier
 function getRewardTier()
     local chance = math.random(100)
     local cumulative = 0
+
     for tier, percentage in pairs(Config.RarityChances) do
         cumulative = cumulative + percentage
         if chance <= cumulative then
@@ -66,5 +54,15 @@ function getRewardTier()
 end
 
 function sendToDiscord(player, item)
-    PerformHttpRequest("WEBHOOK HERE", function() end, "POST", json.encode({content = string.format("**%s** got **%s** from digging", player, item)}), { ["Content-Type"] = "application/json" })
+    local data = {
+        content = ("**%s** sai esineen **%s** kaivaessa."):format(player, item)
+    }
+
+    PerformHttpRequest(
+        Config.Webhook,
+        function() end,
+        "POST",
+        json.encode(data),
+        { ["Content-Type"] = "application/json" }
+    )
 end
